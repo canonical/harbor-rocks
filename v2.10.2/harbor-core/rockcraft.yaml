@@ -43,8 +43,6 @@ parts:
   create-harbor-user:
     plugin: nil
     overlay-script: |
-      # HACK(aznashwan): force quick failure
-      exit 42
       groupadd -R $CRAFT_OVERLAY -r -g 10000 harbor
       useradd -R $CRAFT_OVERLAY \
         --no-log-init -r -m -g 10000 -u 10000 harbor

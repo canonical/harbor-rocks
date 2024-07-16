@@ -53,6 +53,8 @@ parts:
       # have to avoid staging the same files with different content.
       rm -rf $CRAFT_PART_INSTALL/usr/share/nginx/html/
 
+      # HACK()
+
       # TODO: the upstream image defines a healthcheck, stop signal and a volume,
       # should/can we do the same?
 
