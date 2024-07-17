@@ -21,7 +21,7 @@ ORIGINAL_IMAGE = f"docker.io/goharbor/{IMAGE_NAME}:{IMAGE_TAG}"
 
 
 @pytest.mark.abort_on_fail
-def test_check_rock_contains_files(rock_test_env):
+def test_check_rock_contains_files():
     """Test ROCK contains expected files"""
 
     rock_meta = env_util.get_build_meta_info_for_rock_version(
@@ -37,7 +37,7 @@ def test_check_rock_contains_files(rock_test_env):
         rock_image, image_files_to_check)
 
 @pytest.mark.abort_on_fail
-def test_compare_rock_files_to_original(rock_test_env):
+def test_compare_rock_files_to_original():
     """Test ROCK contains same fileset as original image."""
 
     rock_meta = env_util.get_build_meta_info_for_rock_version(
