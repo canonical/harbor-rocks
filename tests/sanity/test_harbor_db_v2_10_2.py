@@ -2,59 +2,31 @@
 # See LICENSE file for licensing details.
 
 import logging
-import random
 import pytest
-import string
-import subprocess
 import sys
 
-from charmed_kubeflow_chisme.rock import CheckRock
-
-logger: logging.Logger = logging.getLogger(__name__)
-
-logger.addHandler(logging.FileHandler(f"{__name__}.log"))
-logger.addHandler(logging.StreamHandler(sys.stdout))
+from k8s_test_harness.util import docker_util
+from k8s_test_harness.util import env_util
 
 
-@pytest.fixture()
-def rock_test_env(tmpdir):
-    """Yields a temporary directory and random docker container name, then cleans them up after."""
-    container_name = "".join(
-        [str(i) for i in random.choices(string.ascii_lowercase, k=8)]
-    )
-    yield tmpdir, container_name
+LOG: logging.Logger = logging.getLogger(__name__)
 
-    try:
-        subprocess.run(["docker", "rm", container_name])
-    except Exception:
-        pass
-    # tmpdir fixture we use here should clean up the other files for us
+LOG.addHandler(logging.FileHandler(f"{__name__}.log"))
+LOG.addHandler(logging.StreamHandler(sys.stdout))
 
 
- def _check_file_present_in_image(image: str, path_to_check: str):
-     """Checks whether a file with the given path is present within an image."""
-     subprocess.run(
-         [
-             "docker",
-             "run",
-             image,
-             "exec",
-             "ls",
-             "-la",
-             path_to_check,
-         ],
-         check=True,
-     )
+IMAGE_NAME = "harbor-db"
+IMAGE_TAG = "v2.10.2"
+ORIGINAL_IMAGE = f"docker.io/goharbor/{IMAGE_NAME}:{IMAGE_TAG}"
 
 
 @pytest.mark.abort_on_fail
-def test_rock(rock_test_env):
-    """Test rock."""
-    _, container_name = rock_test_env
-    check_rock = CheckRock("rockcraft.yaml")
-    rock_image = check_rock.get_name()
-    rock_version = check_rock.get_version()
-    LOCAL_ROCK_IMAGE = f"{rock_image}:{rock_version}"
+def test_check_rock_contains_files(rock_test_env):
+    """Test ROCK contains same fileset as original image."""
+
+    rock_meta = env_util.get_build_meta_info_for_rock_version(
+        IMAGE_NAME, IMAGE_TAG, "amd64")
+    rock_image = rock_meta.image
 
     image_files_to_check = [
         "/var/lib/postgresql/data",
@@ -65,6 +37,5 @@ def test_rock(rock_test_env):
         "/docker-healthcheck.sh",
         "/docker-entrypoint-initdb.d/initial-registry.sql",
     ]
-
-    for file in image_files_to_check:
-        _check_file_present_in_image(LOCAL_ROCK_IMAGE, file)
+    docker_util.ensure_image_contains_paths(
+        rock_image, image_files_to_check)

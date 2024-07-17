@@ -4,4 +4,4 @@ PyYAML==6.0.1
 tenacity==8.2.3
 charmed-kubeflow-chisme>=0.4
 # TODO(aznashwan): update with upstream Canonical repo when the time comes:
-git+https://github.com/petrutlucian94/k8s-test-harness.git@initial
+git+https://github.com/aznashwan/k8s-test-harness.git@main
