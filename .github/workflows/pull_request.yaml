@@ -20,7 +20,7 @@ jobs:
       platform-labels: '{"arm64": ["self-hosted", "Linux", "ARM64", "jammy", "large"]}'
 
   run-tests:
-     uses: canonical/k8s-workflows/.github/workflows/run_tests.yaml@main
+     uses: aznashwan/k8s-workflows/.github/workflows/run_tests.yaml@main
      needs: [build-and-push-arch-specifics]
      secrets: inherit
      with:
@@ -34,6 +34,7 @@ jobs:
       upload-result: ${{ github.event_name == 'push' }}
       images: ${{ needs.build-and-push-arch-specifics.outputs.images }}
       trivy-image-config: ./trivy.yaml
+
   build-and-push-multiarch-manifest:
     name: Combine Rocks and Push Multiarch Manifest
     uses: canonical/k8s-workflows/.github/workflows/assemble_multiarch_image.yaml@main
