@@ -1,4 +1,4 @@
-name: redis
+name: redis-photon
 summary: Rock replacement for the Harbor Redis image.
 description: >
   This rock is a drop in replacement for the

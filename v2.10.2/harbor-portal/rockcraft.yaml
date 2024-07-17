@@ -1,4 +1,4 @@
-name: portal
+name: harbor-portal
 summary: Rock replacement for the Harbor Portal image.
 description: >
   This rock is a drop in replacement for the

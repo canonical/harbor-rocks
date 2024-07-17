@@ -1,4 +1,4 @@
-name: nginx
+name: nginx-photon
 summary: Rock replacement for the Harbor Nginx image.
 description: >
   This rock is a drop in replacement for the

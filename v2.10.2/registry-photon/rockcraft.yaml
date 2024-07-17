@@ -1,4 +1,4 @@
-name: registry
+name: registry-photon
 summary: Rock replacement for the Harbor registry image.
 description: >
   This rock is a drop in replacement for the
