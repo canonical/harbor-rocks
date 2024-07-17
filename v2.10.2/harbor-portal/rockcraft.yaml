@@ -71,8 +71,8 @@ parts:
 
       export NPM_CONFIG_REGISTRY=https://registry.npmjs.org
 
-      export PATH="$PATH:$CRAFT_PART_BUILD/src/portal/node_modules/.bin"
-      npm install ng-swagger-gen
+      # https://github.com/cypress-io/cypress-documentation/issues/5868
+      npm install cypress --save-dev --foreground-scripts
 
       npm install --unsafe-perm
       npm run generate-build-timestamp
