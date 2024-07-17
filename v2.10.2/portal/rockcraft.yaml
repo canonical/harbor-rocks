@@ -72,7 +72,6 @@ parts:
       export NPM_CONFIG_REGISTRY=https://registry.npmjs.org
 
       export PATH="$PATH:$CRAFT_PART_BUILD/src/portal/node_modules/.bin"
-      npm install ng-swagger-gen
 
       npm install --unsafe-perm
       npm run generate-build-timestamp
