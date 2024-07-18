@@ -11,7 +11,7 @@ description: |
   Packages the PostgreSQL DB of Harbor.
 license: Apache-2.0
 
-version: "2.10.2"
+version: "v2.10.2"
 
 # NOTE(aznashwan): the base for the DB image is VMware's Photon,
 # but rockcraft only currently supports bare/ubuntu-based bases.
