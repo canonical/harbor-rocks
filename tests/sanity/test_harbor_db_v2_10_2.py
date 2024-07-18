@@ -30,7 +30,7 @@ def test_check_rock_contains_files():
 
     image_files_to_check = [
         "/var/lib/postgresql/data",
-        "/run/postgresq",
+        "/run/postgresql",
         "/docker-entrypoint.sh",
         "/initdb.sh",
         "/upgrade.sh",

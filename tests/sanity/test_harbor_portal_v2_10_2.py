@@ -3,6 +3,7 @@
 
 import logging
 import pytest
+import re
 import sys
 
 from k8s_test_harness.util import docker_util
@@ -51,8 +52,20 @@ def test_compare_rock_files_to_original():
     rock_image_files = docker_util.list_files_under_container_image_dir(
         rock_image, root_dir=dir_to_check)
 
-    rock_fileset = set(rock_image_files)
-    original_fileset = set(original_image_files)
+    # NOTE(aznashwan): the names of main.js have randomized tags:
+    main_js_re = re.compile('(/usr/share/nginx/html/main\\..*\\.js)')
+    original_image_main = [
+        f for f in original_image_files if main_js_re.match(f)]
+    rock_image_main = [
+        f for f in rock_image_files if main_js_re.match(f)]
+    if original_image_main and not rock_image_main:
+        pytest.fail(
+            f"ROCK image seems to be missing a main.*.js file. "
+            f"Original image's main: {original_image_main}. All "
+            f"ROCK files under {dir_to_check}: {rock_image_files}")
+
+    rock_fileset = set(rock_image_files) - set(rock_image_main)
+    original_fileset = set(original_image_files) - set(original_image_main)
 
     original_extra_files = original_fileset - rock_fileset
     if original_extra_files:

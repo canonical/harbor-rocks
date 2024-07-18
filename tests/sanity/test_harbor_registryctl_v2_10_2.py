@@ -28,7 +28,7 @@ def test_compare_rock_files_to_original():
         IMAGE_NAME, IMAGE_TAG, "amd64")
     rock_image = rock_meta.image
 
-    dir_to_check = "/harbor"
+    dir_to_check = "/home/harbor"
 
     original_image_files = docker_util.list_files_under_container_image_dir(
         ORIGINAL_IMAGE, root_dir=dir_to_check)

@@ -29,11 +29,11 @@ services:
     # NOTE(aznashwan) set start.sh for compatibility with upstream image.
     # All it does is run `./make/photon/common/install_cert.sh` and exec `harbor_registryctl`.
     # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/registryctl/Dockerfile#L21
-    command: /harbor/start.sh
+    command: /home/harbor/start.sh
 
     user: harbor
     group: harbor
-    working-dir: /harbor
+    working-dir: /home/harbor
 
     # TODO(aznashwan): original Docker image includes Healthcheck should/can we also?
     # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/registryctl/Dockerfile#L17
@@ -72,7 +72,7 @@ parts:
       cd $CRAFT_PART_SRC
 
       # Copy over auxiliary files:
-      OUTDIR="$CRAFT_PART_INSTALL/harbor"
+      OUTDIR="$CRAFT_PART_INSTALL/home/harbor"
       mkdir -p "$OUTDIR"
 
       cp ./make/photon/common/install_cert.sh "$OUTDIR/"
@@ -153,9 +153,11 @@ parts:
         -o "$CRAFT_PART_BUILD/harbor_registryctl"
 
       # Copy over binary and set appropriate permissions:
-      mkdir -p $CRAFT_PART_INSTALL/harbor
-      cp $CRAFT_PART_BUILD/harbor_registryctl $CRAFT_PART_INSTALL/harbor
+      OUTDIR="$CRAFT_PART_INSTALL/home/harbor"
+      mkdir -p "$OUTDIR"
 
-      chown 10000:10000 "$CRAFT_PART_INSTALL/harbor/harbor_registryctl"
-      chmod u+x "$CRAFT_PART_INSTALL/harbor/harbor_registryctl"
+      cp $CRAFT_PART_BUILD/harbor_registryctl "$OUTDIR/"
+
+      chown 10000:10000 "$OUTDIR/harbor_registryctl"
+      chmod u+x "$OUTDIR/harbor_registryctl"
 

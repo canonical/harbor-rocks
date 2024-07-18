@@ -127,7 +127,7 @@ parts:
       cp -r ./make/migrations "$OUTDIR/migrations"
       cp -r ./src/core/views "$OUTDIR/views"
       mkdir -p "$OUTDIR/icons"
-      cp -r ./icons "$OUTDIR/icons"
+      cp -r ./icons/* "$OUTDIR/icons"
 
       mkdir -p "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
       chown -R 10000:10000 "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
@@ -140,7 +140,7 @@ parts:
       # the one used in the rockcraft workflows, so this is techinically a lie:
       # canonical/k8s-workflows/.github/workflows/scan_images.yaml
       MAKEFILE="$CRAFT_PART_SRC/Makefile"
-      VERSION_FILE="$CRAFT_PART_INSTALL/harbor/version"
+      VERSION_FILE="$CRAFT_PART_INSTALL/harbor/versions"
       echo "VERSION_TAG: v2.10.2" >> "$VERSION_FILE"
       sed -E -n "s/^(REGISTRYVERSION=(.*))$/REGISTRY_VERSION: \2/p" "$MAKEFILE" >> "$VERSION_FILE"
       sed -E -n "s/^(TRIVYVERSION=(.*))$/TRIVY_VERSION: \2/p" "$MAKEFILE" >> "$VERSION_FILE"
