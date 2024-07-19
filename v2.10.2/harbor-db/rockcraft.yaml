@@ -1,0 +1,177 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for Harbor db image, which is basically a
+# re-packaged PostgreSQL with some added configs/setup files.
+# docker.io/goharbor/harbor-db:v2.10.2
+
+name: harbor-db
+summary: Rock containing Harbor DB PostgreSQL component.
+description: |
+  Packages the PostgreSQL DB of Harbor.
+license: Apache-2.0
+
+version: "v2.10.2"
+
+# NOTE(aznashwan): the base for the DB image is VMware's Photon,
+# but rockcraft only currently supports bare/ubuntu-based bases.
+base: ubuntu@22.04
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+  arm64:
+
+
+# NOTE(aznashwan): The PhotonOS PostgreSQL package releases are
+# simply built from the upstream sources from postgresql.org:
+# https://github.com/vmware/photon/blob/5.0/SPECS/postgresql/postgresql13.spec#L23
+# To avoid needlessly building the packages ourselves, we simply
+# add the upstream posgresql.org deb repos to the build host:
+package-repositories:
+  - type: apt
+    components: [main]
+    suites: [jammy-pgdg]
+    key-id: B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+    url: http://apt.postgresql.org/pub/repos/apt
+    priority: always
+
+
+environment:
+  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base#L3
+  PGDATA: /var/lib/postgresql/data
+
+
+services:
+
+  # HACK(aznashwan): the upstream image's entrypoint calls `initdb.sh`,
+  # which in turn calls postgres' `initdb` with a hardcoded en_US.UTF-8 locale:
+  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/initdb.sh#L34
+  # Because we can't run any of the commands from the `locales` package within
+  # the primed filesystem's context (they'll just change locale settings on
+  # the build host), and locale-related files are apparently excluded
+  # from the final image (1), we have to set this up as its own service:
+  # (1): https://github.com/canonical/craft-parts/blob/1.33.0/craft_parts/packages/deb.py#L140
+  locale_setup:
+    startup: enabled
+    override: replace
+    command: bash -c "apt-get update && apt-get install -y language-pack-en-base"
+    on-success: ignore
+
+  harbor_db:
+    startup: enabled
+    override: replace
+    requires:
+      - locale_setup
+
+    # NOTE(aznashwan) set docker-entrypoint.sh for compatibility with upstream image.
+    # It takes as arguments the older and current ProstgreSQL versions to start:
+    # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile#L15
+    command: /docker-entrypoint.sh 13 14
+
+    user: postgres
+    group: postgres
+
+    # TODO(aznashwan): original Docker image includes Healthcheck should/can we also?
+    # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile#L16
+
+
+parts:
+  create-postgres-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -r postgres --gid=999
+      useradd -R $CRAFT_OVERLAY -m -r -g postgres --uid=999 postgres
+
+  # Sourced from:
+  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base
+  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile
+  setup-harbor-db:
+    after: [create-postgres-user]
+    plugin: nil
+
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.10.2
+    source-depth: 1
+
+    build-environment:
+      - PGDATA: /var/lib/postgresql/data
+
+    stage-packages:
+      # NOTE(aznashwan): upstream image installs both Postgres 13 and 14:
+      # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base#L9-L10
+      - postgresql-13
+      - postgresql-14
+      - findutils
+      - bc
+      - util-linux
+      - net-tools
+      # HACK(aznashwan): the upstream image's entrypoint calls `initdb.sh`,
+      # which in turn calls postgres' `initdb` with a hardcoded en_US.UTF-8 locale:
+      # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/initdb.sh#L34
+      # Because we can't run any of the commands from the `locales` package within
+      # the primed filesystem's context (they'll just change locale settings on
+      # the build host), we simply stage this umbrella package for English:
+      #
+      # Doesn't seem to work due to `locales` being explicitly excluded:
+      # https://github.com/canonical/craft-parts/blob/1.33.0/craft_parts/packages/deb.py#L140
+      # - locales
+      # - language-pack-en-base
+
+    override-build: |
+      set -eux
+
+      # Setup Postgres files:
+      mkdir -p "$CRAFT_PART_INSTALL/run/postgresql"
+      chown -R 999:999 "$CRAFT_PART_INSTALL/run/postgresql"
+      chmod 2777 "$CRAFT_PART_INSTALL/run/postgresql"
+
+      mkdir -p "$CRAFT_PART_INSTALL/$PGDATA"
+      chown -R 999:999 "$CRAFT_PART_INSTALL/$PGDATA"
+      chmod 777 "$CRAFT_PART_INSTALL/$PGDATA"
+
+      sed -i "s|#listen_addresses = 'localhost'.*|listen_addresses = '*'|g" \
+        "$CRAFT_PART_INSTALL/usr/share/postgresql/14/postgresql.conf.sample"
+      sed -i "s|#unix_socket_directories = '/tmp'.*|unix_socket_directories = '/run/postgresql'|g" \
+        "$CRAFT_PART_INSTALL/usr/share/postgresql/14/postgresql.conf.sample"
+
+      # Copy over auxiliary files:
+      cd "$CRAFT_PART_SRC"
+      OUTDIR="$CRAFT_PART_INSTALL"
+
+      cp ./make/photon/db/docker-entrypoint.sh "$OUTDIR/docker-entrypoint.sh"
+      chown 999:999 "$OUTDIR/docker-entrypoint.sh"
+      chmod u+x "$OUTDIR/docker-entrypoint.sh"
+
+      cp ./make/photon/db/docker-healthcheck.sh "$OUTDIR/docker-healthcheck.sh"
+      chown 999:999 "$OUTDIR/docker-healthcheck.sh"
+      chmod u+x "$OUTDIR/docker-healthcheck.sh"
+
+      cp ./make/photon/db/initdb.sh "$OUTDIR/initdb.sh"
+      chown 999:999 "$OUTDIR/initdb.sh"
+      # NOTE(aznashwan): initdb.sh is NOT chmod'd for some reason...
+
+      cp ./make/photon/db/upgrade.sh "$OUTDIR/upgrade.sh"
+      # NOTE(aznashwan): upgrade.sh is NOT chown'd or chmod'd for some reason...
+
+      mkdir -p "$OUTDIR/docker-entrypoint-initdb.d"
+      chown -R 999:999 "$OUTDIR/docker-entrypoint-initdb.d"
+
+      cp ./make/photon/db/initial-registry.sql \
+        "$OUTDIR/docker-entrypoint-initdb.d/initial-registry.sql"
+      cp ./make/photon/db/upgrade.sh "$OUTDIR/"
+
+      # HACK(aznashwan): the upstream harbor-db image sets up
+      # update-alternatives for initdb and a handful of other
+      # commands bundled with PostgreSQL, which will use the
+      # versions from postgresql-14, so we simply symlink them:
+      # https://github.com/vmware/photon/blob/5.0/SPECS/postgresql/postgresql14.spec#L374-L387
+      for full_path in "$CRAFT_PART_INSTALL/usr/lib/postgresql/14/bin/"*; do
+        exe=$(basename $full_path)
+        if [ ! -f "$CRAFT_PART_INSTALL/usr/bin/$exe" ]; then
+          ln -s \
+            "/usr/lib/postgresql/14/bin/$exe" \
+            "$CRAFT_PART_INSTALL/usr/bin/$exe"
+        fi
+      done
+
