@@ -8,9 +8,7 @@ on:
 jobs:
   build-and-push-arch-specifics:
     name: Build Rocks and Push Arch Specific Images
-    # HACK(aznashwan): replace with upstream canonical-owned
-    # workflow once github.com/canonical/k8s-workflows/pull/13 merges.
-    uses: aznashwan/k8s-workflows/.github/workflows/build_rocks.yaml@main
+    uses: canonical/k8s-workflows/.github/workflows/build_rocks.yaml@main
     with:
       owner: ${{ github.repository_owner }}
       trivy-image-config: "trivy.yaml"
@@ -22,9 +20,7 @@ jobs:
       platform-labels: '{"arm64": ["Ubuntu_ARM64_4C_16G_01"]}'
 
   run-tests:
-    # HACK(aznashwan): replace with upstream canonical-owned
-    # workflow once github.com/canonical/k8s-workflows/pull/15 merges.
-     uses: aznashwan/k8s-workflows/.github/workflows/run_tests.yaml@main
+     uses: canonical/k8s-workflows/.github/workflows/run_tests.yaml@main
      needs: [build-and-push-arch-specifics]
      secrets: inherit
      with:
