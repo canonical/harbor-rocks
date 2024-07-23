@@ -1,0 +1,94 @@
+name: trivy-adapter-photon
+summary: Rock replacement for the Harbor Trivy adapter image.
+description: >
+  This rock is a drop in replacement for the
+  docker.io/goharbor/trivy-adapter-photon:v2.9.3 image.
+# Based on the following:
+# https://github.com/goharbor/harbor/tree/v2.9.3/make/photon/trivy-adapter
+version: v2.9.3
+license: Apache-2.0
+
+base: ubuntu@22.04
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+  # arm64:
+
+services:
+  scanner:
+    command: /home/scanner/entrypoint.sh
+    override: replace
+    startup: enabled
+    user: scanner
+    group: scanner
+
+parts:
+  create-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -r -g 10000 scanner
+      useradd -R $CRAFT_OVERLAY \
+        --no-log-init -r -m -g 10000 -u 10000 scanner
+
+  image-prep:
+    after: [create-user]
+    plugin: nil
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.9.3
+    source-depth: 1
+    override-build: |
+      OUTDIR="$CRAFT_PART_INSTALL/home/scanner"
+      mkdir -p "$OUTDIR"
+      cd $CRAFT_PART_SRC
+      cp ./make/photon/common/install_cert.sh "$OUTDIR/"
+      cp ./make/photon/trivy-adapter/entrypoint.sh "$OUTDIR/"
+      mkdir -p "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
+      chown -R 10000:10000 "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
+      chown -R 10000:10000 "$OUTDIR"
+      chmod u+x "$OUTDIR/entrypoint.sh"
+      chmod u+x "$OUTDIR/install_cert.sh"
+
+  trivy:
+    after: [image-prep]
+    build-snaps:
+      - go/1.21/stable
+    plugin: go
+    source-type: git
+    source: https://github.com/aquasecurity/trivy
+    source-tag: v0.49.1
+    source-depth: 1
+    override-build: |
+      export GOOS=linux
+      export GO111MODULE=on
+      export CGO_ENABLED=0
+      go build -o trivy cmd/trivy/main.go
+
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      cp trivy $CRAFT_PART_INSTALL/usr/local/bin/trivy
+      chown 10000:10000 $CRAFT_PART_INSTALL/usr/local/bin/trivy
+
+      # TODO: the upstream image defines a healthcheck,
+      # should/can we do the same?
+
+  trivy-adapter:
+    after: [image-prep]
+    build-snaps:
+      - go/1.21/stable
+    plugin: go
+    source-type: git
+    source: https://github.com/aquasecurity/harbor-scanner-trivy
+    source-tag: v0.30.22
+    source-depth: 1
+    override-build: |
+      export GOOS=linux
+      export GO111MODULE=on
+      export CGO_ENABLED=0
+      go build -o scanner-trivy cmd/scanner-trivy/main.go
+
+      mkdir -p $CRAFT_PART_INSTALL/home/scanner/bin
+      cp scanner-trivy $CRAFT_PART_INSTALL/home/scanner/bin/scanner-trivy
+      chown 10000:10000 $CRAFT_PART_INSTALL/home/scanner/bin/scanner-trivy
+
+      # TODO: the upstream image defines a healthcheck,
+      # should/can we do the same?

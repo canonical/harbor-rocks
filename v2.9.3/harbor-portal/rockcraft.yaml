@@ -1,0 +1,95 @@
+name: harbor-portal
+summary: Rock replacement for the Harbor Portal image.
+description: >
+  This rock is a drop in replacement for the
+  docker.io/goharbor/harbor-portal:v2.9.3 image.
+# Based on the following:
+# https://github.com/goharbor/harbor/tree/v2.9.3/make/photon/portal
+version: v2.9.3
+license: Apache-2.0
+
+base: ubuntu@22.04
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+  # arm64:
+
+services:
+  nginx:
+    command: nginx -g 'daemon off;'
+    override: replace
+    startup: enabled
+    user: nginx
+    group: nginx
+
+parts:
+  nginx-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -g 10000 nginx
+      useradd -R $CRAFT_OVERLAY -u 10000 -g 10000 \
+        -d /home/nginx -s /bin/bash -m nginx
+
+  nginx:
+    after: [nginx-user]
+    plugin: nil
+    stage-packages: [nginx]
+    override-build: |
+      chown -R 10000:10000 $CRAFT_PART_INSTALL/etc/nginx
+
+      mkdir -p $CRAFT_PART_INSTALL/var/log/nginx
+      chown -R 10000:10000 $CRAFT_PART_INSTALL/var/log/nginx
+
+      # The reference image creates these symlinks, however a volume is expected
+      # to be mounted at the given location.
+      #
+      # Also, the github image builder job fails when having these links:
+      #   https://paste.ubuntu.com/p/zsDHyR2NY4/plain/
+      #
+      # ln -sf /dev/stdout $CRAFT_PART_INSTALL/var/log/nginx/access.log
+      # ln -sf /dev/stderr $CRAFT_PART_INSTALL/var/log/nginx/error.log
+
+      # Drop the sample html dir, we'll add the portal files instead and we
+      # have to avoid staging the same files with different content.
+      rm -rf $CRAFT_PART_INSTALL/usr/share/nginx/html/
+
+      # TODO: the upstream image defines a healthcheck, stop signal and a volume,
+      # should/can we do the same?
+
+  portal:
+    after: [nginx]
+    plugin: nil
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.9.3
+    source-depth: 1
+    build-snaps:
+      - node/18/stable
+    override-build: |
+      cd $CRAFT_PART_BUILD/src/portal
+      cp $CRAFT_PART_SRC/api/v2.0/swagger.yaml .
+
+      export NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+
+      # https://github.com/cypress-io/cypress-documentation/issues/5868
+      npm install cypress --save-dev --foreground-scripts
+
+      npm install --unsafe-perm
+      npm run generate-build-timestamp
+      node --max_old_space_size=2048 \
+        'node_modules/@angular/cli/bin/ng' \
+        build --configuration production
+      npm install js-yaml@4.1.0
+      node -e "const yaml = require('js-yaml'); const fs = require('fs'); const swagger = yaml.load(fs.readFileSync('swagger.yaml', 'utf8')); fs.writeFileSync('swagger.json', JSON.stringify(swagger));"
+      cp $CRAFT_PART_SRC/LICENSE dist/
+
+      cd app-swagger-ui
+      npm install --unsafe-perm
+      npm run build
+
+      mkdir -p $CRAFT_PART_INSTALL/usr/share/nginx/html
+      cp -r $CRAFT_PART_BUILD/src/portal/dist/* $CRAFT_PART_INSTALL/usr/share/nginx/html/
+      cp $CRAFT_PART_BUILD/src/portal/swagger.json $CRAFT_PART_INSTALL/usr/share/nginx/html/
+      cp -r $CRAFT_PART_BUILD/src/portal/app-swagger-ui/dist/* $CRAFT_PART_INSTALL/usr/share/nginx/html/
+
+      chown -R 10000:10000 $CRAFT_PART_INSTALL/usr/share/nginx/html

@@ -1,0 +1,53 @@
+name: nginx-photon
+summary: Rock replacement for the Harbor Nginx image.
+description: >
+  This rock is a drop in replacement for the
+  docker.io/goharbor/nginx-photon:v2.6.3 image.
+# Based on the following:
+# https://github.com/goharbor/harbor/tree/v2.6.3/make/photon/nginx
+version: v2.6.3
+license: Apache-2.0
+
+base: ubuntu@22.04
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+  # arm64:
+
+services:
+  nginx:
+    command: nginx -g 'daemon off;'
+    override: replace
+    startup: enabled
+    user: nginx
+    group: nginx
+
+parts:
+  nginx-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -g 10000 nginx
+      useradd -R $CRAFT_OVERLAY -u 10000 -g 10000 \
+        -d /home/nginx -s /bin/bash -m nginx
+
+  nginx:
+    after: [nginx-user]
+    plugin: nil
+    stage-packages: [nginx]
+    override-build: |
+      chown -R 10000:10000 $CRAFT_PART_INSTALL/etc/nginx
+
+      mkdir -p $CRAFT_PART_INSTALL/var/log/nginx
+      chown -R 10000:10000 $CRAFT_PART_INSTALL/var/log/nginx
+
+      # The reference image creates these symlinks, however a volume is expected
+      # to be mounted at the given location.
+      #
+      # Also, the github image builder job fails when having these links:
+      #   https://paste.ubuntu.com/p/zsDHyR2NY4/plain/
+      #
+      # ln -sf /dev/stdout $CRAFT_PART_INSTALL/var/log/nginx/access.log
+      # ln -sf /dev/stderr $CRAFT_PART_INSTALL/var/log/nginx/error.log
+
+      # TODO: the upstream image defines a healthcheck, stop signal and a volume,
+      # should/can we do the same?

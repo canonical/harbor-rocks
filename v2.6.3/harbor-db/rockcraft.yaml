@@ -3,7 +3,7 @@
 
 # Rockcraft definition for Harbor db image, which is basically a
 # re-packaged PostgreSQL with some added configs/setup files.
-# docker.io/goharbor/harbor-db:v2.10.2
+# docker.io/goharbor/harbor-db:v2.6.3
 
 name: harbor-db
 summary: Rock containing Harbor DB PostgreSQL component.
@@ -11,7 +11,7 @@ description: |
   Packages the PostgreSQL DB of Harbor.
 license: Apache-2.0
 
-version: "v2.10.2"
+version: "v2.6.3"
 
 # NOTE(aznashwan): the base for the DB image is VMware's Photon,
 # but rockcraft only currently supports bare/ubuntu-based bases.
@@ -19,7 +19,7 @@ base: ubuntu@22.04
 build-base: ubuntu@22.04
 platforms:
   amd64:
-  arm64:
+  # arm64:
 
 
 # NOTE(aznashwan): The PhotonOS PostgreSQL package releases are
@@ -37,7 +37,7 @@ package-repositories:
 
 
 environment:
-  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base#L3
+  # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/db/Dockerfile.base#L3
   PGDATA: /var/lib/postgresql/data
 
 
@@ -49,14 +49,14 @@ services:
 
     # NOTE(aznashwan) set docker-entrypoint.sh for compatibility with upstream image.
     # It takes as arguments the older and current ProstgreSQL versions to start:
-    # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile#L15
-    command: /docker-entrypoint.sh 13 14
+    # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/db/Dockerfile#L17
+    command: /docker-entrypoint.sh 96 13
 
     user: postgres
     group: postgres
 
     # TODO(aznashwan): original Docker image includes Healthcheck should/can we also?
-    # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile#L16
+    # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/db/Dockerfile#L16
 
 
 parts:
@@ -67,25 +67,22 @@ parts:
       useradd -R $CRAFT_OVERLAY -m -r -g postgres --uid=999 postgres
 
   # Sourced from:
-  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base
-  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile
+  # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/db/Dockerfile.base
+  # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/db/Dockerfile
   setup-harbor-db:
     after: [create-postgres-user]
     plugin: nil
 
     source-type: git
     source: https://github.com/goharbor/harbor
-    source-tag: v2.10.2
+    source-tag: v2.6.3
     source-depth: 1
 
     build-environment:
       - PGDATA: /var/lib/postgresql/data
 
     stage-packages:
-      # NOTE(aznashwan): upstream image installs both Postgres 13 and 14:
-      # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base#L9-L10
       - postgresql-13
-      - postgresql-14
       - findutils
       - bc
       - util-linux
@@ -94,7 +91,7 @@ parts:
     overlay-packages:
       # NOTE(aznashwan): the upstream image's entrypoint calls `initdb.sh`,
       # which in turn calls postgres' `initdb` with a hardcoded en_US.UTF-8 locale:
-      # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/initdb.sh#L34
+      # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/db/initdb.sh#L34
       - locales
       - language-pack-en-base
 
@@ -111,9 +108,9 @@ parts:
       chmod 777 "$CRAFT_PART_INSTALL/$PGDATA"
 
       sed -i "s|#listen_addresses = 'localhost'.*|listen_addresses = '*'|g" \
-        "$CRAFT_PART_INSTALL/usr/share/postgresql/14/postgresql.conf.sample"
+        "$CRAFT_PART_INSTALL/usr/share/postgresql/13/postgresql.conf.sample"
       sed -i "s|#unix_socket_directories = '/tmp'.*|unix_socket_directories = '/run/postgresql'|g" \
-        "$CRAFT_PART_INSTALL/usr/share/postgresql/14/postgresql.conf.sample"
+        "$CRAFT_PART_INSTALL/usr/share/postgresql/13/postgresql.conf.sample"
 
       # Copy over auxiliary files:
       cd "$CRAFT_PART_SRC"
@@ -139,14 +136,16 @@ parts:
 
       cp ./make/photon/db/initial-registry.sql \
         "$OUTDIR/docker-entrypoint-initdb.d/initial-registry.sql"
+      cp ./make/photon/db/initial-notaryserver.sql \
+        "$OUTDIR/docker-entrypoint-initdb.d/initial-notaryserver.sql"
+      cp ./make/photon/db/initial-notarysigner.sql \
+        "$OUTDIR/docker-entrypoint-initdb.d/initial-notarysigner.sql"
       cp ./make/photon/db/upgrade.sh "$OUTDIR/"
 
-      # HACK(aznashwan): the upstream harbor-db image sets up
-      # update-alternatives for initdb and a handful of other
-      # commands bundled with PostgreSQL, which will use the
-      # versions from postgresql-14, so we simply symlink them:
-      # https://github.com/vmware/photon/blob/5.0/SPECS/postgresql/postgresql14.spec#L374-L387
-      for full_path in "$CRAFT_PART_INSTALL/usr/lib/postgresql/14/bin/"*; do
+      # NOTE(aznashwan): the upstream harbor-db image sets up symlinks
+      # for all posgresql 13 binaries directly in /usr/bin:
+      # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/db/Dockerfile.base#L15
+      for full_path in "$CRAFT_PART_INSTALL/usr/lib/postgresql/13/bin/"*; do
         exe=$(basename $full_path)
         if [ ! -f "$CRAFT_PART_INSTALL/usr/bin/$exe" ]; then
           ln -s \

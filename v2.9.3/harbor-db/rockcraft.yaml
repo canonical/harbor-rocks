@@ -3,7 +3,7 @@
 
 # Rockcraft definition for Harbor db image, which is basically a
 # re-packaged PostgreSQL with some added configs/setup files.
-# docker.io/goharbor/harbor-db:v2.10.2
+# docker.io/goharbor/harbor-db:v2.9.3
 
 name: harbor-db
 summary: Rock containing Harbor DB PostgreSQL component.
@@ -11,7 +11,7 @@ description: |
   Packages the PostgreSQL DB of Harbor.
 license: Apache-2.0
 
-version: "v2.10.2"
+version: "v2.9.3"
 
 # NOTE(aznashwan): the base for the DB image is VMware's Photon,
 # but rockcraft only currently supports bare/ubuntu-based bases.
@@ -19,7 +19,7 @@ base: ubuntu@22.04
 build-base: ubuntu@22.04
 platforms:
   amd64:
-  arm64:
+  # arm64:
 
 
 # NOTE(aznashwan): The PhotonOS PostgreSQL package releases are
@@ -37,7 +37,7 @@ package-repositories:
 
 
 environment:
-  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base#L3
+  # https://github.com/goharbor/harbor/blob/v2.9.3/make/photon/db/Dockerfile.base#L3
   PGDATA: /var/lib/postgresql/data
 
 
@@ -49,14 +49,14 @@ services:
 
     # NOTE(aznashwan) set docker-entrypoint.sh for compatibility with upstream image.
     # It takes as arguments the older and current ProstgreSQL versions to start:
-    # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile#L15
+    # https://github.com/goharbor/harbor/blob/v2.9.3/make/photon/db/Dockerfile#L15
     command: /docker-entrypoint.sh 13 14
 
     user: postgres
     group: postgres
 
     # TODO(aznashwan): original Docker image includes Healthcheck should/can we also?
-    # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile#L16
+    # https://github.com/goharbor/harbor/blob/v2.9.3/make/photon/db/Dockerfile#L16
 
 
 parts:
@@ -67,15 +67,15 @@ parts:
       useradd -R $CRAFT_OVERLAY -m -r -g postgres --uid=999 postgres
 
   # Sourced from:
-  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base
-  # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile
+  # https://github.com/goharbor/harbor/blob/v2.9.3/make/photon/db/Dockerfile.base
+  # https://github.com/goharbor/harbor/blob/v2.9.3/make/photon/db/Dockerfile
   setup-harbor-db:
     after: [create-postgres-user]
     plugin: nil
 
     source-type: git
     source: https://github.com/goharbor/harbor
-    source-tag: v2.10.2
+    source-tag: v2.9.3
     source-depth: 1
 
     build-environment:
@@ -83,7 +83,7 @@ parts:
 
     stage-packages:
       # NOTE(aznashwan): upstream image installs both Postgres 13 and 14:
-      # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/Dockerfile.base#L9-L10
+      # https://github.com/goharbor/harbor/blob/v2.9.3/make/photon/db/Dockerfile.base#L9-L10
       - postgresql-13
       - postgresql-14
       - findutils
@@ -94,7 +94,7 @@ parts:
     overlay-packages:
       # NOTE(aznashwan): the upstream image's entrypoint calls `initdb.sh`,
       # which in turn calls postgres' `initdb` with a hardcoded en_US.UTF-8 locale:
-      # https://github.com/goharbor/harbor/blob/v2.10.2/make/photon/db/initdb.sh#L34
+      # https://github.com/goharbor/harbor/blob/v2.9.3/make/photon/db/initdb.sh#L34
       - locales
       - language-pack-en-base
 

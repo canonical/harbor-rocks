@@ -1,0 +1,84 @@
+name: registry-photon
+summary: Rock replacement for the Harbor registry image.
+description: >
+  This rock is a drop in replacement for the
+  docker.io/goharbor/registry-photon:v2.6.3 image.
+# Based on the following:
+# https://github.com/goharbor/harbor/tree/v2.6.3/make/photon/registry
+version: v2.6.3
+license: Apache-2.0
+
+base: ubuntu@22.04
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+  # arm64:
+
+services:
+  registry:
+    command: /home/harbor/entrypoint.sh
+    override: replace
+    startup: enabled
+    user: harbor
+    group: harbor
+    working-dir: /home/harbor
+
+parts:
+  create-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -r -g 10000 harbor
+      useradd -R $CRAFT_OVERLAY \
+        --no-log-init -r -m -g 10000 -u 10000 harbor
+
+  image-prep:
+    after: [create-user]
+    plugin: nil
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.6.3
+    source-depth: 1
+    override-build: |
+      OUTDIR="$CRAFT_PART_INSTALL/home/harbor"
+      mkdir -p "$OUTDIR"
+      cd $CRAFT_PART_SRC
+      cp ./make/photon/common/install_cert.sh "$OUTDIR/"
+      cp ./make/photon/registry/entrypoint.sh "$OUTDIR/"
+      mkdir -p "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
+      chown -R 10000:10000 "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
+      chown -R 10000:10000 "$OUTDIR"
+      chmod u+x "$OUTDIR/entrypoint.sh"
+      chmod u+x "$OUTDIR/install_cert.sh"
+
+  registry:
+    after: [image-prep]
+    build-snaps:
+      - go/1.18/stable
+    plugin: go
+    source-type: git
+    source: https://github.com/distribution/distribution.git
+    source-tag: v2.8.0
+    source-depth: 1
+    override-build: |
+      git apply --ignore-whitespace $CRAFT_PROJECT_DIR/redis.patch
+
+      # 2.8.3 doesn't have a go.mod definition.
+      mkdir -p /go/src/github.com/docker
+
+      ln -sf $(pwd) /go/src/github.com/docker/distribution
+
+      pushd /go/src/github.com/docker/distribution
+
+      export GOPATH=/go
+      export BUILDTAGS=include_oss include_gcs
+      export GO111MODULE=auto
+      export CGO_ENABLED=0
+      make clean binaries
+
+      mkdir -p $CRAFT_PART_INSTALL/usr/bin
+
+      cp bin/registry $CRAFT_PART_INSTALL/usr/bin/registry_DO_NOT_USE_GC
+      chown 10000:10000 $CRAFT_PART_INSTALL/usr/bin/registry_DO_NOT_USE_GC
+
+      # TODO: the upstream image defines a healthcheck and a volume,
+      # should/can we do the same?
