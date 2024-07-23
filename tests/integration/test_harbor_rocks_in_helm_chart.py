@@ -83,12 +83,13 @@ def test_harbor_chart_deployment(
             f"of version '{image_version}' and architecture '{architecture}'. "
             f"All built images metadata was: {all_rocks_meta_info}")
 
+    install_name = f"{INSTALL_NAME}-{image_version.replace('.', '-')}"
     helm_command = [
         "sudo",
         "k8s",
         "helm",
         "install",
-        INSTALL_NAME,
+        install_name,
         CHART_RELEASE_URL,
     ]
     helm_command.extend(all_chart_value_overrides_args)
