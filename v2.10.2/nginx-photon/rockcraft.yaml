@@ -16,7 +16,7 @@ platforms:
 
 services:
   nginx:
-    command: nginx -g daemon off
+    command: nginx -g 'daemon off;'
     override: replace
     startup: enabled
     user: nginx
