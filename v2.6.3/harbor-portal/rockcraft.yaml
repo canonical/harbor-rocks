@@ -64,6 +64,7 @@ parts:
     source-tag: v2.6.3
     source-depth: 1
     build-packages:
+      - g++
       - python3-yaml
     build-snaps:
       - node/16/stable
@@ -83,6 +84,17 @@ parts:
 
       cd "$OUTDIR"
       mkdir -p "$OUTDIR/dist"
+
+      # HACK(aznashwan): add override for listed parcel/watcher which fails to build on ARM64.
+      # Sadly 2.1.0 also shows the same issue, with 2.2.0 being the earliest
+      # release available on NPM which actually works...
+      # https://github.com/parcel-bundler/watcher/issues/156#issuecomment-1762236540
+      if [ "$CRAFT_TARGET_ARCH" == "arm64" ]; then
+        PACKAGE_JSON="$OUTDIR/package.json"
+        python3 -c 'import sys, json; p=json.loads(sys.stdin.read()); p["overrides"] = {"@parcel/watcher": "2.2.0"}; print(json.dumps(p, indent=4))' < "$PACKAGE_JSON" > "$PACKAGE_JSON.new"
+        mv "$PACKAGE_JSON.new" "$PACKAGE_JSON"
+      fi
+
       npm install --unsafe-perm
       npm run generate-build-timestamp
 
