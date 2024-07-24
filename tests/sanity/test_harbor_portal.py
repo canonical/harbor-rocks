@@ -8,6 +8,7 @@ import sys
 
 from k8s_test_harness.util import docker_util
 from k8s_test_harness.util import env_util
+from k8s_test_harness.util import platform_util
 
 
 LOG: logging.Logger = logging.getLogger(__name__)
@@ -17,16 +18,18 @@ LOG.addHandler(logging.StreamHandler(sys.stdout))
 
 
 IMAGE_NAME = "harbor-portal"
-IMAGE_TAG = "v2.10.2"
-ORIGINAL_IMAGE = f"docker.io/goharbor/{IMAGE_NAME}:{IMAGE_TAG}"
+IMAGE_VERSIONS = ["v2.6.3", "v2.9.3", "v2.10.2"]
 
 
 @pytest.mark.abort_on_fail
-def test_check_rock_contains_files():
+@pytest.mark.parametrize("image_version", IMAGE_VERSIONS)
+def test_check_rock_contains_files(image_version):
     """Test ROCK contains expected files"""
 
+    architecture = platform_util.get_current_rockcraft_platform_architecture()
+
     rock_meta = env_util.get_build_meta_info_for_rock_version(
-        IMAGE_NAME, IMAGE_TAG, "amd64")
+        IMAGE_NAME, image_version, architecture)
     rock_image = rock_meta.image
 
     image_files_to_check = [
@@ -38,17 +41,21 @@ def test_check_rock_contains_files():
         rock_image, image_files_to_check)
 
 @pytest.mark.abort_on_fail
-def test_compare_rock_files_to_original():
+@pytest.mark.parametrize("image_version", IMAGE_VERSIONS)
+def test_compare_rock_files_to_original(image_version):
     """Test ROCK contains same fileset as original image."""
 
+    original_image = f"docker.io/goharbor/{IMAGE_NAME}:{image_version}"
+    architecture = platform_util.get_current_rockcraft_platform_architecture()
+
     rock_meta = env_util.get_build_meta_info_for_rock_version(
-        IMAGE_NAME, IMAGE_TAG, "amd64")
+        IMAGE_NAME, image_version, architecture)
     rock_image = rock_meta.image
 
     dir_to_check = "/usr/share/nginx/html"
 
     original_image_files = docker_util.list_files_under_container_image_dir(
-        ORIGINAL_IMAGE, root_dir=dir_to_check)
+        original_image, root_dir=dir_to_check)
     rock_image_files = docker_util.list_files_under_container_image_dir(
         rock_image, root_dir=dir_to_check)
 

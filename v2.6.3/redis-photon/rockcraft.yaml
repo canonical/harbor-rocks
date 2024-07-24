@@ -1,0 +1,64 @@
+name: redis-photon
+summary: Rock replacement for the Harbor Redis image.
+description: >
+  This rock is a drop in replacement for the
+  docker.io/goharbor/redis-photon:v2.6.3 image.
+# Based on the following:
+# https://github.com/goharbor/harbor/tree/v2.6.3/make/photon/redis
+version: v2.6.3
+license: Apache-2.0
+
+base: ubuntu@22.04
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+  arm64:
+
+package-repositories:
+  - type: apt
+    components: [main]
+    suites: [jammy]
+    key-id: 54318FA4052D1E61A6B6F7BB5F4349D6BF53AA0C
+    url: https://packages.redis.io/deb
+    priority: always
+
+services:
+  redis:
+    command: redis-server /etc/redis.conf
+    override: replace
+    startup: enabled
+    user: redis
+    group: redis
+    # working-dir: /var/lib/redis
+
+parts:
+  redis-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -g 999 redis
+      useradd -R $CRAFT_OVERLAY -u 999 -g 999 -c "Redis Database Server" \
+        -d /var/lib/redis -s /sbin/nologin -m redis
+
+  image-prep:
+    after: [redis-user]
+    plugin: nil
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.6.3
+    source-depth: 1
+    override-build: |
+      mkdir -p $CRAFT_PART_INSTALL/usr/bin
+      mkdir -p $CRAFT_PART_INSTALL/etc
+      cd $CRAFT_PART_SRC
+      cp ./make/photon/redis/docker-healthcheck $CRAFT_PART_INSTALL/usr/bin
+      cp ./make/photon/redis/redis.conf $CRAFT_PART_INSTALL/etc/redis.conf
+
+      chown 999:999 $CRAFT_PART_INSTALL/etc/redis.conf
+      chmod +x $CRAFT_PART_INSTALL/usr/bin/docker-healthcheck
+
+  redis:
+    after: [image-prep]
+    plugin: nil
+    stage-packages: [redis]
+    # TODO: the upstream image defines a healthcheck and a volume,
+    # should/can we do the same?

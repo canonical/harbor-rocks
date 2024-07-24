@@ -1,0 +1,189 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for Harbor core image:
+# docker.io/goharbor/harbor-core:v2.6.3
+
+name: harbor-core
+summary: Rock containing Harbor Core components.
+description: |
+  Packages the core service of Harbor.
+license: Apache-2.0
+
+version: "v2.6.3"
+
+# NOTE(aznashwan): the base for the core image is VMware's Photon,
+# but rockcraft only currently supports bare/ubuntu-based bases.
+base: ubuntu@22.04
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+  arm64:
+
+
+services:
+  harbor_core:
+    startup: enabled
+    override: replace
+
+    # NOTE(aznashwan) set entrypoint.sh for compatibility with upstream image.
+    # All it does is run `./make/photon/common/install_cert.sh` and exec `harbor_core`.
+    # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/core/Dockerfile#L21
+    command: /harbor/entrypoint.sh
+
+    user: harbor
+    group: harbor
+    working-dir: /harbor
+
+    # TODO(aznashwan): original Docker image includes Healthcheck should/can we also?
+    # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/core/Dockerfile#L5
+
+
+parts:
+  create-harbor-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -r -g 10000 harbor
+      useradd -R $CRAFT_OVERLAY \
+        --no-log-init -r -m -g 10000 -u 10000 harbor
+
+  build-deps:
+    plugin: nil
+    build-snaps:
+      # https://github.com/goharbor/harbor/blob/v2.6.3/Makefile#L143
+      - go/1.18/stable
+    build-packages:
+      - make
+      - curl
+
+  # NOTE(aznashwan): lint_apis Makefile target should ideally
+  # be also run for added compatibility guarantees:
+  # https://github.com/goharbor/harbor/blob/f86f1cebc3a1af8c5c14c0a94d687fff04ebc6eb/Makefile#L289-L291
+  # Sourced from:
+  # https://github.com/goharbor/harbor/blob/v2.6.3/Makefile#L309
+  gen-apis:
+    plugin: nil
+
+    # TODO(aznashwan): avoid cloning the repo twice.
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.6.3
+    source-depth: 1
+
+    build-environment:
+      # NOTE(aznashwan): the swagger binary needs a Go path pre-created.
+      - CGO_ENABLED: 0
+      - GOPATH: /root/go
+
+    override-build: |
+      set -eux
+
+      mkdir -p "$GOPATH"
+
+      SWAGGER_VERSION=v0.25.0
+      cd "$CRAFT_PART_SRC/src/core"
+
+      curl -fsSL -o /usr/bin/swagger \
+        https://github.com/go-swagger/go-swagger/releases/download/$SWAGGER_VERSION/swagger_linux_${CRAFT_ARCH_BUILD_FOR}
+      chmod +x /usr/bin/swagger
+
+      /usr/bin/swagger generate server \
+        --template-dir "$CRAFT_PART_SRC/tools/swagger/templates" --exclude-main \
+        --additional-initialism=CVE --additional-initialism=GC --additional-initialism=OIDC \
+        -f "$CRAFT_PART_SRC/api/v2.0/swagger.yaml" \
+        --target "$CRAFT_PART_BUILD/src/server/v2.0" \
+        -A harbor
+
+      # Move them to the project dir for use in later building part:
+      cp -r "$CRAFT_PART_BUILD/src/server/v2.0" "$CRAFT_PROJECT_DIR/swagger-server-specs"
+
+  # Sourced from:
+  # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/core/Dockerfile.base
+  # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/core/Dockerfile
+  image-prep:
+    after: [create-harbor-user]
+    plugin: nil
+
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.6.3
+    source-depth: 1
+
+    stage-packages:
+      # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/core/Dockerfile.base#L3
+      - tzdata
+
+    override-build: |
+      set -eux
+      cd $CRAFT_PART_SRC
+
+      # Copy over auxiliary files:
+      OUTDIR="$CRAFT_PART_INSTALL/harbor"
+      mkdir -p "$OUTDIR"
+
+      cp ./make/photon/common/install_cert.sh "$OUTDIR/"
+      cp ./make/photon/core/entrypoint.sh "$OUTDIR/"
+
+      cp -r ./make/migrations "$OUTDIR/migrations"
+      cp -r ./src/core/views "$OUTDIR/views"
+      mkdir -p "$OUTDIR/icons"
+      cp -r ./icons/* "$OUTDIR/icons"
+
+      mkdir -p "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
+      chown -R 10000:10000 "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
+      chown -R 10000:10000 "$OUTDIR/"
+      chmod u+x "$OUTDIR/entrypoint.sh"
+      chmod u+x "$OUTDIR/install_cert.sh"
+
+      # NOTE(aznashwan): these values are harcoded in Harbor's Makefile.
+      # The Trivy version used by Harbor will almost surely be different from
+      # the one used in the rockcraft workflows, so this is techinically a lie:
+      # canonical/k8s-workflows/.github/workflows/scan_images.yaml
+      MAKEFILE="$CRAFT_PART_SRC/Makefile"
+      VERSION_FILE="$CRAFT_PART_INSTALL/harbor/versions"
+      echo "VERSION_TAG: v2.6.3" >> "$VERSION_FILE"
+      sed -E -n "s/^(REGISTRYVERSION=(.*))$/REGISTRY_VERSION: \2/p" "$MAKEFILE" >> "$VERSION_FILE"
+      sed -E -n "s/^(TRIVYVERSION=(.*))$/TRIVY_VERSION: \2/p" "$MAKEFILE" >> "$VERSION_FILE"
+      sed -E -n "s/^(TRIVYADAPTERVERSION=(.*))$/TRIVY_ADAPTER_VERSION: \2/p" "$MAKEFILE" >> "$VERSION_FILE"
+
+  # Sourced from: https://github.com/goharbor/harbor/blob/v2.6.3/Makefile#L342
+  build-harbor-core:
+    after: [create-harbor-user, build-deps, gen-apis, image-prep]
+    # NOTE(aznashwan): Harbor's Makefile relies on building through Docker,
+    # so we have to run the build commands manually:
+    plugin: go
+
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.6.3
+    source-depth: 1
+    source-subdir: src
+
+    build-environment:
+      - CGO_ENABLED: 0
+      - GOARCH: $CRAFT_ARCH_BUILD_FOR
+
+    override-build: |
+      set -eux
+
+      # Copy over swagger API gens from previous part:
+      mkdir -p "$CRAFT_PART_SRC/src/server/v2.0"
+      cp -r "$CRAFT_PROJECT_DIR/swagger-server-specs/"* "$CRAFT_PART_SRC/src/server/v2.0/"
+
+      # Deduce ldflags:
+      GIT_TAG="v2.6.3"
+      GIT_COMMIT_ID=`git -C "$CRAFT_PART_SRC" log --pretty=tformat:"%h" -n1`
+
+      # Build binary:
+      cd "$CRAFT_PART_SRC/src/core"
+      go build \
+        -ldflags="-w -s -X github.com/goharbor/harbor/src/pkg/version.GitCommit=$GIT_COMMIT_ID -X github.com/goharbor/harbor/src/pkg/version.ReleaseVersion=$GIT_TAG" \
+        -o "$CRAFT_PART_BUILD/harbor_core"
+
+      # Copy over binary and set appropriate permissions:
+      mkdir -p $CRAFT_PART_INSTALL/harbor
+      cp $CRAFT_PART_BUILD/harbor_core $CRAFT_PART_INSTALL/harbor
+
+      chown 10000:10000 "$CRAFT_PART_INSTALL/harbor/harbor_core"
+      chmod u+x "$CRAFT_PART_INSTALL/harbor/harbor_core"
+

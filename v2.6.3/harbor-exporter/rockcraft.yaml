@@ -1,0 +1,129 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for Harbor eporter image:
+# docker.io/goharbor/harbor-exporter:v2.6.3
+
+name: harbor-exporter
+summary: Rock containing Harbor Exporter component.
+description: |
+  Packages the Expoter of Harbor.
+license: Apache-2.0
+
+version: "v2.6.3"
+
+# NOTE(aznashwan): the base for the expoter image is VMware's Photon,
+# but rockcraft only currently supports bare/ubuntu-based bases.
+base: ubuntu@22.04
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+  arm64:
+
+
+services:
+  harbor_expoter:
+    startup: enabled
+    override: replace
+
+    # NOTE(aznashwan) set exntrypoint.sh for compatibility with upstream image.
+    # All it does is run `./make/photon/common/install_cert.sh` and exec `harbor_expoter`.
+    # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/exporter/Dockerfile#L29
+    command: /harbor/entrypoint.sh
+
+    user: harbor
+    group: harbor
+    working-dir: /harbor
+
+
+parts:
+  create-harbor-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -r -g 10000 harbor
+      useradd -R $CRAFT_OVERLAY \
+        --no-log-init -r -m -g 10000 -u 10000 harbor
+
+  build-deps:
+    plugin: nil
+    build-snaps:
+      # https://github.com/goharbor/harbor/blob/v2.6.3/Makefile#L143
+      - go/1.18/stable
+    build-packages:
+      - make
+
+  # Sourced from:
+  # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/exporter/Dockerfile.base
+  # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/exporter/Dockerfile
+  image-prep:
+    after: [create-harbor-user]
+    plugin: nil
+
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.6.3
+    source-depth: 1
+
+    stage-packages:
+       # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/exporter/Dockerfile.base#L3
+       - tzdata
+
+    override-build: |
+      set -eux
+      cd $CRAFT_PART_SRC
+
+      # Copy over auxiliary files:
+      OUTDIR="$CRAFT_PART_INSTALL/harbor"
+      mkdir -p "$OUTDIR"
+
+      cp ./make/photon/common/install_cert.sh "$OUTDIR/"
+      cp ./make/photon/exporter/entrypoint.sh "$OUTDIR/"
+
+      mkdir -p "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
+      chown -R 10000:10000 "$CRAFT_PART_INSTALL/etc/pki/tls/certs"
+      chown -R 10000:10000 "$OUTDIR/"
+      chmod u+x "$OUTDIR/entrypoint.sh"
+      chmod u+x "$OUTDIR/install_cert.sh"
+
+  # Sourced from: https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/exporter/Dockerfile
+  build-harbor-exporter:
+    after: [create-harbor-user, build-deps, image-prep]
+    # NOTE(aznashwan): Harbor's Makefile relies on building through Docker,
+    # so we have to run the build commands manually:
+    plugin: go
+
+    source-type: git
+    source: https://github.com/goharbor/harbor
+    source-tag: v2.6.3
+    source-depth: 1
+    source-subdir: src
+
+    build-environment:
+      - GOOS: linux
+      - CGO_ENABLED: 0
+      - GOARCH: $CRAFT_ARCH_BUILD_FOR
+
+    override-build: |
+      set -eux
+
+      # Deduce ldflags:
+      # NOTE(aznashwan): the exporter binary bears no build tags, but we add
+      # them anyway for consistency with the building of the core binaries:
+      # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/exporter/Dockerfile#L13
+      # https://github.com/goharbor/harbor/blob/v2.6.3/Makefile#L153
+      GIT_TAG="v2.6.3"
+      GIT_COMMIT_ID=`git -C "$CRAFT_PART_SRC" log --pretty=tformat:"%h" -n1`
+
+      # Build binary:
+      cd "$CRAFT_PART_SRC/src/cmd/exporter"
+      go build \
+        -ldflags="-w -s -X github.com/goharbor/harbor/src/pkg/version.GitCommit=$GIT_COMMIT_ID -X github.com/goharbor/harbor/src/pkg/version.ReleaseVersion=$GIT_TAG" \
+        -o "$CRAFT_PART_BUILD/harbor_exporter"
+
+      # Copy over binary and set appropriate permissions:
+      mkdir -p $CRAFT_PART_INSTALL/harbor
+      cp $CRAFT_PART_BUILD/harbor_exporter $CRAFT_PART_INSTALL/harbor
+
+      chown 10000:10000 "$CRAFT_PART_INSTALL/harbor/harbor_exporter"
+      chmod u+x "$CRAFT_PART_INSTALL/harbor/harbor_exporter"
+
