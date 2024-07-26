@@ -16,12 +16,24 @@ platforms:
 
 services:
   registry:
-    command: /home/harbor/entrypoint.sh
+    # NOTE(aznashwan): the upstream image defines an entrypoint.sh script
+    # which harcodes the config path values and ignores all arguments,
+    # leading to incompatibilities when the container is started with
+    # custom arguments (e.g. in a Helm chart) as detailed here:
+    # https://github.com/goharbor/harbor-helm/issues/1801
+    # Considering said entrypoint.sh script only has an added call to
+    # install_cert.sh which is no-op on non-Photon-based images,
+    # it is safe to simply set the command to the registry binary directly.
+    # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/registry/entrypoint.sh
+    # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/common/install_cert.sh#L5-L8
+    command: /usr/bin/registry_DO_NOT_USE_GC [ serve /etc/registry/config.yml ]
     override: replace
     startup: enabled
     user: harbor
     group: harbor
     working-dir: /home/harbor
+
+entrypoint-service: registry
 
 parts:
   create-user:
