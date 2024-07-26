@@ -47,7 +47,7 @@ IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP = {
 
 @pytest.mark.parametrize("image_version", IMAGE_VERSIONS)
 def test_harbor_chart_deployment(
-        module_instance: harness.Instance, image_version: str):
+        function_instance: harness.Instance, image_version: str):
 
     architecture = platform_util.get_current_rockcraft_platform_architecture()
 
@@ -83,22 +83,21 @@ def test_harbor_chart_deployment(
             f"of version '{image_version}' and architecture '{architecture}'. "
             f"All built images metadata was: {all_rocks_meta_info}")
 
-    install_name = f"{INSTALL_NAME}-{image_version.replace('.', '-')}"
     helm_command = [
         "sudo",
         "k8s",
         "helm",
         "install",
-        install_name,
+        INSTALL_NAME,
         CHART_RELEASE_URL,
     ]
     helm_command.extend(all_chart_value_overrides_args)
 
-    module_instance.exec(helm_command)
+    function_instance.exec(helm_command)
 
     deployments = [
         "harbor-core", "harbor-jobservice", "harbor-portal", "harbor-registry"]
     for deployment in deployments:
         k8s_util.wait_for_deployment(
-            module_instance, deployment,
+            function_instance, deployment,
             condition=constants.K8S_CONDITION_AVAILABLE)
