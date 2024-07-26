@@ -96,10 +96,9 @@ def test_harbor_chart_deployment(
 
     module_instance.exec(helm_command)
 
-    # TODO(aznashwan): determine why integration tests don't work on the GH runners:
-    # deployments = [
-    #     "harbor-core", "harbor-jobservice", "harbor-portal", "harbor-registry"]
-    # for deployment in deployments:
-    #     k8s_util.wait_for_deployment(
-    #         module_instance, deployment,
-    #         condition=constants.K8S_CONDITION_AVAILABLE)
+    deployments = [
+        "harbor-core", "harbor-jobservice", "harbor-portal", "harbor-registry"]
+    for deployment in deployments:
+        k8s_util.wait_for_deployment(
+            module_instance, deployment,
+            condition=constants.K8S_CONDITION_AVAILABLE)
