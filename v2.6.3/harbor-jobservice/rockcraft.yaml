@@ -29,7 +29,11 @@ services:
     # NOTE(aznashwan) set entrypoint.sh for compatibility with upstream image.
     # All it does is run `./make/photon/common/install_cert.sh` and exec `harbor_jobservice`.
     # https://github.com/goharbor/harbor/blob/v2.6.3/make/photon/jobservice/Dockerfile#L24
-    command: /harbor/entrypoint.sh
+    # HACK(aznashwan): the `harbor_jobservice` executable instantly panics
+    # if the `harbor-core` component isn't online yet, making Pebble consider
+    # it inactive and not bothering to restart it unless it lasts at least 1s.
+    # https://github.com/canonical/pebble/issues/240
+    command: /bin/sh -c '/harbor/entrypoint.sh; sleep 1.1'
 
     user: harbor
     group: harbor
