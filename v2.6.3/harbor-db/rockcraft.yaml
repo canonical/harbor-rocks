@@ -149,7 +149,7 @@ parts:
         exe=$(basename $full_path)
         if [ ! -f "$CRAFT_PART_INSTALL/usr/bin/$exe" ]; then
           ln -s \
-            "/usr/lib/postgresql/14/bin/$exe" \
+            "/usr/lib/postgresql/13/bin/$exe" \
             "$CRAFT_PART_INSTALL/usr/bin/$exe"
         fi
       done
