@@ -72,15 +72,20 @@ parts:
       # should/can we do the same?
 
   trivy-adapter:
-    after: [image-prep]
-    build-snaps:
-      - go/1.18/stable
+    after: [image-prep, trivy]
+    # build-snaps:
+    #   - go/1.18/stable
     plugin: go
     source-type: git
     source: https://github.com/aquasecurity/harbor-scanner-trivy
     source-tag: v0.30.6
     source-depth: 1
     override-build: |
+      # NOTE(aznashwan): trivy needs Go >= 1.19, while the trivy-adapter-photon
+      # needs Go <= 1.18. `build-snaps` override each-other even when the tasks
+      # are set to execute sequentially, so we manually refresh the Go snap here:
+      snap refresh go --channel=1.18/stable
+
       export GOOS=linux
       export GO111MODULE=on
       export CGO_ENABLED=0
