@@ -67,7 +67,7 @@ parts:
       - g++
       - python3-yaml
     build-snaps:
-      - node/16/stable
+      - node/17/stable
     override-build: |
       OUTDIR="$CRAFT_PART_BUILD/build_dir"
       mkdir -p "$OUTDIR"
