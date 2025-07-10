@@ -23,7 +23,7 @@ CHART_RELEASE_URL = (
 INSTALL_NAME = "harbor"
 
 # This mapping indicates which fields of the upstream Harbor Helm chart
-# contain the 'image' fields which should be overriden with the ROCK
+# contain the 'image' fields which should be overridden with the ROCK
 # image URLs and version during testing.
 # https://github.com/goharbor/harbor-helm/blob/main/values.yaml
 IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP = {
