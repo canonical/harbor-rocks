@@ -1,6 +1,6 @@
 # harbor-rocks
 
-OCI images for [Harbor](https://github.com/giharbor/harbor) components built using [rockcraft](https://github.com/canonical/rockcraft).
+OCI images for [Harbor](https://github.com/goharbor/harbor) components built using [rockcraft](https://github.com/canonical/rockcraft).
 
 Images are meant to be Ubuntu-based drop-in replacements for the following
 upstream images:
